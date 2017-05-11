@@ -199,4 +199,85 @@ class SpecBasedCurveTest extends AbstractTestCase
         $this->assertSame($sR, $math->toString($sig->getR()));
         $this->assertSame($sS, $math->toString($sig->getS()));
     }
+
+    /**
+     * @return array
+     */
+    public function getECDSATestSet()
+    {
+        $yaml = new Yaml();
+        $files = $this->getFiles();
+        $datasets = [];
+
+        foreach ($files as $file) {
+            $data = $yaml->parse(file_get_contents($file));
+            $generator = CurveFactory::getGeneratorByName($data['name']);
+
+            if (array_key_exists('ecdsa', $data)) {
+                foreach ($data['ecdsa'] as $testKeyPair) {
+                    $algo = null;
+                    $msg = null; // full message, not the digest
+                    $hashRaw = null;
+                    if (!array_key_exists('msg', $testKeyPair)) {
+                        if (!array_key_exists('msg_full', $testKeyPair)) {
+                            throw new \RuntimeException("Need full message if not given raw hash value");
+                        }
+                        $algo = "sha1";
+                        $msg = $testKeyPair['msg_full'];
+                    } else {
+                        $hashRaw = $testKeyPair['msg'];
+                    }
+
+                    $datasets[] = [
+                        $generator,
+                        $testKeyPair['private'],
+                        (string) $testKeyPair['k'],
+                        (string) $testKeyPair['r'],
+                        (string) $testKeyPair['s'],
+                        $hashRaw,
+                        $msg,
+                        $algo,
+                    ];
+                }
+            }
+        }
+
+        return $datasets;
+    }
+
+    /**
+     * @dataProvider getECDSATestSet
+     * @param GeneratorPoint $G
+     * @param $privKeyHex
+     * @param $hashHex
+     * @param $kHex
+     * @param $eR
+     * @param $eS
+     * @param string|null $algo
+     */
+    public function testEcdsaSignatureGeneration(GeneratorPoint $G, $privKeyHex, $kHex, $eR, $eS, $hashHex = null, $msg = null, $algo = null)
+    {
+        $math = $G->getAdapter();
+        $signer = new Signer($math);
+        $privateKey = $G->getPrivateKeyFrom(gmp_init($privKeyHex, 10));
+
+        if ($hashHex != null) {
+            $hash = gmp_init($hashHex, 16);
+        } else {
+            $hash = $signer->hashData($G, $algo, hex2bin($msg));
+        }
+
+        $k = gmp_init($kHex, 16);
+
+        $sig = $signer->sign($privateKey, $hash, $k);
+
+        // R and S should be correct
+        $sR = $math->hexDec($eR);
+        $sS = $math->hexDec($eS);
+        $this->assertSame($sR, $math->toString($sig->getR()));
+        $this->assertSame($sS, $math->toString($sig->getS()));
+
+        // Should verify
+        $this->assertTrue($signer->verify($privateKey->getPublicKey(), $sig, $hash));
+    }
 }
