@@ -103,11 +103,11 @@ class Signer
         $s = $signature->getS();
 
         $math = $this->adapter;
-        if ($math->cmp($r, 1) < 1 || $math->cmp($r, $math->sub($n, 1)) > 0) {
+        if ($math->cmp($r, 1) < 0 || $math->cmp($r, $math->sub($n, 1)) > 0) {
             return false;
         }
 
-        if ($math->cmp($s, 1) < 1 || $math->cmp($s, $math->sub($n, 1)) > 0) {
+        if ($math->cmp($s, 1) < 0 || $math->cmp($s, $math->sub($n, 1)) > 0) {
             return false;
         }
 
